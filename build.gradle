@@ -1,0 +1,29 @@
+apply plugin: 'java'
+
+compileJava {
+    sourceCompatibility = 1.8
+    targetCompatibility = 1.8
+
+    options.incremental = true
+}
+
+repositories {
+    jcenter()
+}
+
+project.ext {
+    akkaVersion = '2.4.10'
+    log4j2Version = '2.6.2'
+}
+
+dependencies {
+    compile "com.typesafe.akka:akka-actor_2.11:$akkaVersion"
+    compile "com.typesafe.akka:akka-slf4j_2.11:$akkaVersion"
+
+    compile 'org.slf4j:slf4j-api:1.7.21'
+    compile "org.apache.logging.log4j:log4j-slf4j-impl:$log4j2Version"
+    compile "org.apache.logging.log4j:log4j-core:$log4j2Version"
+
+    testCompile 'junit:junit:4.12'
+    testCompile "com.typesafe.akka:akka-testkit_2.11:$akkaVersion"
+}
