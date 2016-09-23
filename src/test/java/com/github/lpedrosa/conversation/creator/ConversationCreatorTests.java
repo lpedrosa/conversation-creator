@@ -20,9 +20,13 @@ public class ConversationCreatorTests extends AkkaTest {
         final ActorRef conversationCreator = system().actorOf(ConversationCreator.props(queueSize));
         final JavaTestKit mockRequester = mockActor();
 
-        conversationCreator.tell(new CreateConversation(), mockRequester.getRef());
-        conversationCreator.tell(new CreateConversation(), mockRequester.getRef());
+        conversationCreator.tell(newCreateConversationMessage(), mockRequester.getRef());
+        conversationCreator.tell(newCreateConversationMessage(), mockRequester.getRef());
 
         mockRequester.expectMsgEquals(ConversationCreatorMessage.CreatorOverloaded);
+    }
+
+    private CreateConversation newCreateConversationMessage() {
+        return new CreateConversation("randomId");
     }
 }

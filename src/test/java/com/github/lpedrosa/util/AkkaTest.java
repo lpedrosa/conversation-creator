@@ -1,5 +1,6 @@
 package com.github.lpedrosa.util;
 
+import akka.actor.ActorRef;
 import akka.actor.ActorSystem;
 import akka.testkit.JavaTestKit;
 
@@ -26,5 +27,11 @@ public abstract class AkkaTest {
 
     protected static JavaTestKit mockActor() {
         return new JavaTestKit(system());
+    }
+
+    protected static JavaTestKit newDeadWatcher(ActorRef target) {
+        final JavaTestKit watcher = mockActor();
+        watcher.watch(target);
+        return watcher;
     }
 }
