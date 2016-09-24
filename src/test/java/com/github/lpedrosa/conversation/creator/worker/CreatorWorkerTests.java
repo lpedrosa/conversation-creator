@@ -4,14 +4,18 @@ import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import akka.actor.ActorRef;
-import akka.actor.Terminated;
+import akka.actor.*;
+import akka.dispatch.ExecutionContexts;
+import akka.pattern.Backoff;
+import akka.pattern.BackoffSupervisor;
 import akka.testkit.JavaTestKit;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
+import com.sun.prism.paint.Stop;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -22,19 +26,20 @@ import com.github.lpedrosa.conversation.creator.message.CreateConversation;
 import com.github.lpedrosa.conversation.service.ConversationBackend;
 import com.github.lpedrosa.conversation.service.ConversationInfo;
 import com.github.lpedrosa.util.AkkaTest;
+import scala.concurrent.ExecutionContext;
+import scala.concurrent.duration.Duration;
 
 @RunWith(JUnit4.class)
 public class CreatorWorkerTests extends AkkaTest {
 
     private ConversationBackend mockBackend;
-    private ExecutorService testService;
-    private ActorRef creatorWorker;
+    private MonitoredRef creatorWorker;
 
     @Before
     public void before() {
         this.mockBackend = mock(ConversationBackend.class);
-        this.testService = Executors.newSingleThreadExecutor();
-        this.creatorWorker = system().actorOf(CreatorWorker.props(mockBackend, testService));
+        Props creatorWorkerProps = CreatorWorker.props(mockBackend, system().dispatcher());
+        this.creatorWorker = newDeadMonitor(creatorWorkerProps);
     }
 
     @Test
@@ -62,19 +67,18 @@ public class CreatorWorkerTests extends AkkaTest {
         // given
         final String applicationId = "applicationId";
 
-        ConversationInfo expectedResponse = new ConversationInfo("id", null, applicationId);
         CompletableFuture<ConversationInfo> response = new CompletableFuture<>();
         response.completeExceptionally(new Exception("Boom!"));
+
         when(this.mockBackend.createConversation(anyString()))
                     .thenReturn(response);
-
-        final JavaTestKit creatorWatcher = newDeadWatcher(this.creatorWorker);
 
         // when
         this.creatorWorker.tell(new CreateConversation(applicationId), ActorRef.noSender());
 
         // then
-        creatorWatcher.expectMsgClass(Terminated.class);
+        this.creatorWorker.expectActorToBeDead();
     }
+
 
 }

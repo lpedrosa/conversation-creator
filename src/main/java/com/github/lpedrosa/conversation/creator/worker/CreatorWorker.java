@@ -19,17 +19,17 @@ import com.github.lpedrosa.conversation.service.ConversationInfo;
 public class CreatorWorker extends UntypedActor {
 
     private final ConversationBackend backend;
-    private final ExecutorService waitingPool;
+    private final ExecutionContext blockingContext;
 
     private ActorRef originalSender;
 
-    public static Props props(ConversationBackend backend, ExecutorService waitingPool) {
-        return Props.create(CreatorWorker.class, () -> new CreatorWorker(backend, waitingPool));
+    public static Props props(ConversationBackend backend, ExecutionContext blockingContext) {
+        return Props.create(CreatorWorker.class, () -> new CreatorWorker(backend, blockingContext));
     }
 
-    private CreatorWorker(ConversationBackend backend, ExecutorService waitingPool) {
+    private CreatorWorker(ConversationBackend backend, ExecutionContext blockingContext) {
         this.backend = Objects.requireNonNull(backend);
-        this.waitingPool = Objects.requireNonNull(waitingPool);
+        this.blockingContext = Objects.requireNonNull(blockingContext);
     }
 
     @Override
@@ -51,7 +51,6 @@ public class CreatorWorker extends UntypedActor {
         CompletableFuture<ConversationInfo> response =
                 this.backend.createConversation(message.getApplicationId());
 
-        ExecutionContext context = ExecutionContexts.fromExecutor(this.waitingPool);
-        PatternsCS.pipe(response, context).to(getSelf());
+        PatternsCS.pipe(response, this.blockingContext).to(getSelf());
     }
 }
