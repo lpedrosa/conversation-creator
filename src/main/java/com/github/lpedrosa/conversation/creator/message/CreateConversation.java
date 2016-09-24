@@ -1,6 +1,6 @@
 package com.github.lpedrosa.conversation.creator.message;
 
-public class CreateConversation {
+public final class CreateConversation {
     private final String applicationId;
 
     public CreateConversation(String applicationId) {
