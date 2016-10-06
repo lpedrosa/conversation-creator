@@ -24,17 +24,14 @@ public class ConversationCreatorTests extends AkkaTest {
 
     @Test
     public void itShouldExecuteRequestsOnAWorkerWhenThereIsOneAvailable() {
-        final int queueSize = 1;
-        final JavaTestKit mockWorkerPool = mockActor();
-        final JavaTestKit mockRequester = mockActor();
-        final ActorRef conversationCreator = newConversationCreator(queueSize, mockWorkerPool.getRef());
+        final ActorRef conversationCreator = newConversationCreator(1, mockActor().getRef());
 
         // tell the creator there is a worker available
         final JavaTestKit mockWorker = mockActor();
-        conversationCreator.tell(new WorkerAvailable(mockWorker.getRef()), mockWorkerPool.getRef());
+        conversationCreator.tell(new WorkerAvailable(mockWorker.getRef()), ActorRef.noSender());
 
         // tell the creator to do some work
-        conversationCreator.tell(newCreateConversationMessage(), mockRequester.getRef());
+        conversationCreator.tell(newCreateConversationMessage(), mockActor().getRef());
 
         // worker should have received the work
         mockWorker.expectMsgClass(CreateConversation.class);
@@ -42,17 +39,14 @@ public class ConversationCreatorTests extends AkkaTest {
 
     @Test
     public void itShouldExecuteQueuedRequestsWhenThereIsAWorkerAvailable() {
-        final int queueSize = 1;
-        final JavaTestKit mockWorkerPool = mockActor();
-        final JavaTestKit mockRequester = mockActor();
-        final ActorRef conversationCreator = newConversationCreator(queueSize, mockWorkerPool.getRef());
+        final ActorRef conversationCreator = newConversationCreator(1, mockActor().getRef());
 
         // tell the creator to do some work
-        conversationCreator.tell(newCreateConversationMessage(), mockRequester.getRef());
+        conversationCreator.tell(newCreateConversationMessage(), mockActor().getRef());
 
         // tell the creator there is a worker available
         final JavaTestKit mockWorker = mockActor();
-        conversationCreator.tell(new WorkerAvailable(mockWorker.getRef()), mockWorkerPool.getRef());
+        conversationCreator.tell(new WorkerAvailable(mockWorker.getRef()), ActorRef.noSender());
 
         // worker should have received the work
         mockWorker.expectMsgClass(CreateConversation.class);
@@ -60,11 +54,8 @@ public class ConversationCreatorTests extends AkkaTest {
 
     @Test
     public void itShouldRejectRequestsIfTheWorkerSupervisorIsDown() {
-        final int queueSize = 1;
         final JavaTestKit mockWorkerPool = mockActor();
-        final JavaTestKit mockRequester = mockActor();
-
-        final ActorRef conversationCreator = newConversationCreator(queueSize, mockWorkerPool.getRef());
+        final ActorRef conversationCreator = newConversationCreator(1, mockWorkerPool.getRef());
 
         // kill the pool
         // TODO extract into a method
@@ -75,6 +66,8 @@ public class ConversationCreatorTests extends AkkaTest {
             e.printStackTrace();
         }
 
+        final JavaTestKit mockRequester = mockActor();
+
         conversationCreator.tell(newCreateConversationMessage(), mockRequester.getRef());
 
         mockRequester.expectMsgEquals(ConversationCreatorMessage.CreatorOverloaded);
@@ -82,12 +75,20 @@ public class ConversationCreatorTests extends AkkaTest {
 
     @Test
     public void itShouldRejectRequestsWhenQueueSizeIsReached() {
-        final int queueSize = 1;
-        final JavaTestKit mockWorkerPool = mockActor();
+        final ActorRef conversationCreator = newConversationCreator(1, mockActor().getRef());
         final JavaTestKit mockRequester = mockActor();
-        final ActorRef conversationCreator = newConversationCreator(queueSize, mockWorkerPool.getRef());
 
         conversationCreator.tell(newCreateConversationMessage(), mockRequester.getRef());
+        conversationCreator.tell(newCreateConversationMessage(), mockRequester.getRef());
+
+        mockRequester.expectMsgEquals(ConversationCreatorMessage.CreatorOverloaded);
+    }
+
+    @Test
+    public void itShouldRejectRequestsIfThereIsNoQueueConfigured() {
+        final ActorRef conversationCreator = newConversationCreator(0, mockActor().getRef());
+        final JavaTestKit mockRequester = mockActor();
+
         conversationCreator.tell(newCreateConversationMessage(), mockRequester.getRef());
 
         mockRequester.expectMsgEquals(ConversationCreatorMessage.CreatorOverloaded);
