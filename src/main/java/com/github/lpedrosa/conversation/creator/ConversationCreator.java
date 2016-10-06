@@ -6,18 +6,22 @@ import akka.actor.Terminated;
 import akka.actor.UntypedActor;
 import akka.japi.Procedure;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.BlockingDeque;
 import java.util.concurrent.LinkedBlockingDeque;
 
 import com.github.lpedrosa.conversation.creator.message.ConversationCreatorMessage;
 import com.github.lpedrosa.conversation.creator.message.CreateConversation;
 import com.github.lpedrosa.conversation.creator.pool.message.CreatorWorkerPoolMessage;
+import com.github.lpedrosa.conversation.creator.pool.message.WorkerAvailable;
 import com.github.lpedrosa.conversation.creator.pool.message.Workers;
+import com.google.common.base.Preconditions;
 
+/**
+ * TODO:
+ *
+ * - queueing conversation creator is too complicated, should try a simple implementation
+ */
 public class ConversationCreator extends UntypedActor {
 
     private final BlockingDeque<CreateConversation> queuedRequests;
@@ -31,7 +35,9 @@ public class ConversationCreator extends UntypedActor {
     }
 
     private ConversationCreator(int queueSize, ActorRef workerPool) {
-        this.queuedRequests = queueSize < 1 ? null : new LinkedBlockingDeque<>(queueSize);
+        Preconditions.checkArgument(queueSize >= 0);
+        // FIXME this blows up when size == 0
+        this.queuedRequests = new LinkedBlockingDeque<>(queueSize);
         this.availableWorkers = new ArrayDeque<>();
         this.workerPool = Objects.requireNonNull(workerPool);
     }
@@ -67,6 +73,8 @@ public class ConversationCreator extends UntypedActor {
     private Procedure<Object> active = message -> {
         if (message instanceof CreateConversation) {
             createConversation((CreateConversation) message);
+        } else if (message instanceof WorkerAvailable) {
+            handleWorkerAvailable((WorkerAvailable) message);
         } else if (message instanceof Terminated) {
             handleTerminated((Terminated) message);
         } else {
@@ -77,26 +85,44 @@ public class ConversationCreator extends UntypedActor {
     private void createConversation(CreateConversation message) {
         ActorRef worker = this.availableWorkers.pollFirst();
 
-        // no available workers
-        if (worker == null) {
-            boolean queuedRequest = queueRequest(message);
-            if (!queuedRequest) {
-                getSender().tell(ConversationCreatorMessage.CreatorOverloaded, self());
-            }
+        // if there a worker available, push it to the queue
+        if (worker != null) {
+            worker.tell(message, getSelf());
             return;
         }
 
-        worker.tell(message, getSelf());
+        // no available workers
+        boolean queuedRequest = this.queuedRequests.offer(message);
+        if (!queuedRequest) {
+            getSender().tell(ConversationCreatorMessage.CreatorOverloaded, getSelf());
+        }
     }
 
-    private boolean queueRequest(CreateConversation message) {
-        if (this.queuedRequests == null)
-            return false;
+    private void handleWorkerAvailable(WorkerAvailable message) {
+        ActorRef worker = message.getWorkerRef();
+        this.availableWorkers.add(worker);
 
-        return this.queuedRequests.offer(message);
+        tryDispatchQueuedWork(this.queuedRequests, this.availableWorkers, getSelf());
     }
 
     private void handleTerminated(Terminated message) {
 
     }
+
+    private static void tryDispatchQueuedWork(Deque<CreateConversation> workQueue,
+                                              Deque<ActorRef> workers,
+                                              ActorRef self) {
+        CreateConversation queuedWork = workQueue.peek();
+
+        if (queuedWork != null) {
+            // give a worker some queued work
+            // if there is one available
+            ActorRef nextAvailable = workers.poll();
+            if (nextAvailable != null) {
+                nextAvailable.tell(queuedWork, self);
+                workQueue.remove();
+            }
+        }
+    }
+
 }

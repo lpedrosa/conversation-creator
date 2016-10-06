@@ -4,8 +4,10 @@ import akka.actor.ActorRef;
 import akka.actor.Props;
 import akka.pattern.PatternsCS;
 import akka.testkit.JavaTestKit;
+import com.github.lpedrosa.conversation.creator.pool.message.Workers;
 import scala.concurrent.duration.Duration;
 
+import java.util.Collections;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -100,6 +102,9 @@ public class ConversationCreatorTests extends AkkaTest {
 
     private ActorRef newConversationCreator(int queueSize, ActorRef workerPool) {
         final Props creatorProps = ConversationCreator.props(queueSize, workerPool);
-        return system().actorOf(creatorProps);
+        ActorRef creator = system().actorOf(creatorProps);
+        creator.tell(new Workers(Collections.emptySet()), ActorRef.noSender());
+
+        return creator;
     }
 }
